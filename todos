@@ -1,0 +1,89 @@
+#!/bin/bash
+#
+# Tool to keep a personal log/todo list with options for adding, editing and marking entries as done.
+# First argument can be a date, default to today.
+#
+JOURNAL_DIR=~/journal
+
+usage() {
+  echo "Usage `basename $0` [date] [operation] [args...]" >&2
+
+  echo "date: Any value for date --date=. Default is today">&2
+  echo "operation:" >&2
+  echo "  add: adds a new entry to the log" >&2
+  echo "  ed/edit: edit the day's log" >&2
+  echo "  done: marks an entry as done" >&2
+  exit 1
+}
+
+get_journal_file() {
+  echo $JOURNAL_DIR/`date --date="$JOURNAL_DATE" +%Y/%m/%d.txt`
+}
+
+print_journal_date() {
+  echo -e "\e[37m" `date --date="$JOURNAL_DATE" +"%A %Y-%m-%d"` "\e[39m"
+}
+
+print_journal() {
+  cat -n $1 | sed -r "s/(^.*\[DONE\].*)/`printf "\033[32m"`\1`printf "\033[0m"`/g"
+}
+
+show_journal() {
+  local JOURNAL_FILE=`get_journal_file`
+  if [ -f $JOURNAL_FILE ]; then
+    print_journal_date
+    print_journal $JOURNAL_FILE
+  else
+    echo "There are no journal entries for $JOURNAL_DATE"
+  fi
+}
+
+add_journal_entry() {
+  local JOURNAL_FILE=`get_journal_file`
+  mkdir -p `dirname $JOURNAL_FILE`
+  shift
+  echo $@ >> $JOURNAL_FILE
+}
+
+edit_journal() {
+  local JOURNAL_FILE=`get_journal_file`
+  mkdir -p `dirname $JOURNAL_FILE`
+  /usr/bin/editor $JOURNAL_FILE
+}
+
+mark_completed() {
+  local JOURNAL_FILE=`get_journal_file`
+  mkdir -p `dirname $JOURNAL_FILE`
+  sed -i -e $1's/$/ [DONE]&/' $JOURNAL_FILE
+}
+
+JOURNAL_DATE="today"
+
+# Parse options
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  usage
+  exit
+fi
+
+if [[ "$1" == "-"* || "$1" == "+"* && "$1" ]]; then
+  JOURNAL_DATE="$1 day"
+  shift
+elif [[ "$1" != "" && "$1" != "add" && "$1" != "done" && "$1" != "edit" && "$1" != "ed" && "$1" != "since" && "$1" != "to" ]]; then
+  # If $1 is not a valid operation, try to use it as date
+  JOURNAL_DATE="$1"
+  shift
+fi
+
+if [ $# == 0 ]; then
+  show_journal
+elif [ "$1" == "add" ]; then
+  add_journal_entry $@
+  show_journal
+elif [ "$1" == "done" ]; then
+  mark_completed $2
+  show_journal
+elif [ "$1" == "ed" ] || [ $1 == "edit" ]; then
+  edit_journal $@
+else
+  usage
+fi
